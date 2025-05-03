@@ -183,7 +183,7 @@ const schemes = [
                   {
                     id: "4-1-2-1-3",
                     name: "वैयक्तिक कर्ज व्याज परतावा योजना",
-                    description: "१०.०० लाखांपर्यंतच्या कर्जावर १२% व्याजदरापर्यंत व्याज परतावा मिळतो, जो लाभार्थ्यांच्या बँक खात्यात दरमहा जमा केला जातो. या योजनेंतर्गत व्याज परतावा थेट लाभारthyांच्या आधार लिंक केलेल्या बँक खात्यात जमा होतो, ज्यामुळे त्यांना आर्थिक भार कमी होतो.",
+                    description: "१०.०० लाखांपर्यंतच्या कर्जावर १२% व्याजदरापर्यंत व्याज परतावा मिळतो, जो लाभार्थ्यांच्या बँक खात्यात दरमहा जमा केला जातो. या योजनेंतर्गत व्याज परतावा थेट लाभार्थ्यांच्या आधार लिंक केलेल्या बँक खात्यात जमा होतो, ज्यामुळे त्यांना आर्थिक भार कमी होतो.",
                   },
                   {
                     id: "4-1-2-1-4",
@@ -210,7 +210,7 @@ const schemes = [
                   {
                     id: "4-1-2-2-3",
                     name: "वैयक्तिक कर्ज व्याज परतावा योजना",
-                    description: "१०.०० लाखांपर्यंतच्या कर्जावर १२% व्याजदरापर्यंत व्याज परतावा मिळतो, जो लाभार्थ्यांच्या बँक खात्यात दरमहा जमा केला जातो. या योजनेंतर्गत व्याज परतावा थेट लाभारthyांच्या आधार लिंक केलेल्या बँक खात्यात जमा होतो, ज्यामुळे त्यांना आर्थिक भार कमी होतो.",
+                    description: "१०.०० लाखांपर्यंतच्या कर्जावर १२% व्याजदरापर्यंत व्याज परतावा मिळतो, जो लाभार्थ्यांच्या बँक खात्यात दरमहा जमा केला जातो. या योजनेंतर्गत व्याज परतावा थेट लाभार्थ्यांच्या आधार लिंक केलेल्या बँक खात्यात जमा होतो, ज्यामुळे त्यांना आर्थिक भार कमी होतो.",
                   },
                   {
                     id: "4-1-2-2-4",
@@ -259,8 +259,8 @@ app.post('/webhook', (req, res) => {
         state.currentLevel = 'subScheme';
         response = `तुम्ही निवडलेली मुख्य योजना: ${scheme.name}\n` +
           `उपयोजनांची यादी:\n` +
-          scheme.subSchemes.map(ss => `${ss.id}. ${ss.name}`).join('\n') +
-          '\n\nकृपया उपयोजनाचा क्रमांक टाइप करा (उदा., 1-1)\n' +
+          scheme.subSchemes.map((ss, index) => `${index + 1}. ${ss.name}`).join('\n') +
+          '\n\nकृपया उपयोजनाचा क्रमांक टाइप करा (उदा., 1)\n' +
           'कृपया मुख्य योजनेवर परत जाण्यासाठी \'मेनू\' टाइप करा';
       } else {
         response = `तुम्ही निवडलेली मुख्य योजना: ${scheme.name}\n` +
@@ -274,15 +274,16 @@ app.post('/webhook', (req, res) => {
         '\n\nकृपया मुख्य योजनेचा क्रमांक टाइप करा (उदा., 1)';
     }
   } else if (state.currentLevel === 'subScheme') {
-    const subScheme = state.selectedScheme.subSchemes.find(ss => ss.id === message);
-    if (subScheme) {
+    const subSchemeIndex = parseInt(message) - 1;
+    if (subSchemeIndex >= 0 && subSchemeIndex < state.selectedScheme.subSchemes.length) {
+      const subScheme = state.selectedScheme.subSchemes[subSchemeIndex];
       state.selectedSubScheme = subScheme;
       if (subScheme.subSchemes && subScheme.subSchemes.length > 0) {
         state.currentLevel = 'subSubScheme';
         response = `तुम्ही निवडलेली उपयोजना: ${subScheme.name}\n` +
           `उप-उपयोजनांची यादी:\n` +
-          subScheme.subSchemes.map(sss => `${sss.id}. ${sss.name}`).join('\n') +
-          '\n\nकृपया उप-उपयोजनाचा क्रमांक टाइप करा (उदा., 1-1-1)\n' +
+          subScheme.subSchemes.map((sss, index) => `${index + 1}. ${sss.name}`).join('\n') +
+          '\n\nकृपया उप-उपयोजनाचा क्रमांक टाइप करा (उदा., 1)\n' +
           'कृपया मुख्य योजनेवर परत जाण्यासाठी \'मेनू\' टाइप करा';
       } else {
         response = `तुम्ही निवडलेली उपयोजना: ${subScheme.name}\n` +
@@ -292,20 +293,21 @@ app.post('/webhook', (req, res) => {
       }
     } else {
       response = `अवैध उपयोजना क्रमांक. कृपया योग्य उपयोजना निवडा:\n` +
-        state.selectedScheme.subSchemes.map(ss => `${ss.id}. ${ss.name}`).join('\n') +
-        '\n\nकृपया उपयोजनाचा क्रमांक टाइप करा (उदा., 1-1)\n' +
+        state.selectedScheme.subSchemes.map((ss, index) => `${index + 1}. ${ss.name}`).join('\n') +
+        '\n\nकृपया उपयोजनाचा क्रमांक टाइप करा (उदा., 1)\n' +
         'कृपया मुख्य योजनेवर परत जाण्यासाठी \'मेनू\' टाइप करा';
     }
   } else if (state.currentLevel === 'subSubScheme') {
-    const subSubScheme = state.selectedSubScheme.subSchemes.find(sss => sss.id === message);
-    if (subSubScheme) {
+    const subSubSchemeIndex = parseInt(message) - 1;
+    if (subSubSchemeIndex >= 0 && subSubSchemeIndex < state.selectedSubScheme.subSchemes.length) {
+      const subSubScheme = state.selectedSubScheme.subSchemes[subSubSchemeIndex];
       response = `तुम्ही निवडलेली उप-उपयोजना: ${subSubScheme.name}\n` +
         `विवरण: ${subSubScheme.description}\n\n` +
         'कृपया मुख्य योजनेवर परत जाण्यासाठी \'मेनू\' टाइप करा';
     } else {
       response = `अवैध उप-उपयोजना क्रमांक. कृपया योग्य उप-उपयोजना निवडा:\n` +
-        state.selectedSubScheme.subSchemes.map(sss => `${sss.id}. ${sss.name}`).join('\n') +
-        '\n\nकृपया उप-उपयोजनाचा क्रमांक टाइप करा (उदा., 1-1-1)\n' +
+        state.selectedSubScheme.subSchemes.map((sss, index) => `${index + 1}. ${sss.name}`).join('\n') +
+        '\n\nकृपया उप-उपयोजनाचा क्रमांक टाइप करा (उदा., 1)\n' +
         'कृपया मुख्य योजनेवर परत जाण्यासाठी \'मेनू\' टाइप करा';
     }
   }
