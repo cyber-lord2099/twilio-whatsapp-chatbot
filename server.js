@@ -4,9 +4,9 @@ const app = express();
 const port = 3000;
 
 // Twilio credentials
-const accountSid = 'your_account_sid'; // Replace with your Twilio Account SID
-const authToken = 'your_auth_token';   // Replace with your Twilio Auth Token
-const client = new twilio(accountSid, authToken);
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER;
 
 // Middleware to parse incoming requests
 app.use(express.urlencoded({ extended: true }));
