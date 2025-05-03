@@ -150,7 +150,7 @@ app.post('/webhook', (req, res) => {
   // Split the incoming message into parts
   const messageParts = incomingMessage.split('.').map(part => part.trim());
 
-  if (messageParts.length === 1 && messageParts[0] === 'हाय') {
+  if (messageParts.length === 1 && (messageParts[0] === 'हाय' || messageParts[0] === 'Hi')) {
     // Initial greeting
     responseMessage = 'नमस्ते! खालील योजनांची माहिती पाहण्यासाठी मुख्य योजना निवडा:\n';
     mainSchemes.forEach((scheme, index) => {
