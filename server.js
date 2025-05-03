@@ -1,237 +1,208 @@
+require('dotenv').config();
 const express = require('express');
 const twilio = require('twilio');
 const app = express();
 const port = 3000;
 
-// Twilio credentials
-const accountSid = process.env.TWILIO_ACCOUNT_SID; // Replace with your Twilio Account SID
-const authToken = process.env.TWILIO_AUTH_TOKEN;   // Replace with your Twilio Auth Token
-const client = new twilio(accountSid, authToken);
-
-// Middleware to parse incoming requests
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Main schemes available
-const mainSchemes = [
-  'शैक्षणिक योजना',
-  'घरकुल/पायाभूत सुविधा बाबतच्या योजना',
-  'भटक्या जमाती क प्रवर्ग (धनगर) समाजासाठी राबविण्यात येणान्या विविध योजना',
-  'सामाजिक योजना',
-  'कौशल्य विकास व अर्थसाहाय्याच्या योजना'
-];
+// Twilio credentials
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+const twilioWhatsAppNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 
-// Sub-schemes under each main scheme
-const subSchemes = {
-  '1': [
-    'आश्रमशाळा',
-    'शिष्यवृत्ती',
-    'वसतीगृहे/आधार योजना'
-  ],
-  '2': [
-    'तांडा/वस्ती सुधारणा',
-    'मुक्त वसाहती',
-    'घरकुले'
-  ],
-  '3': [
-    'धनगर समाजाच्या विद्यार्थ्यांना शहरातील इंग्रजी माध्यमाच्या नामांकित निवासी शाळेत प्रवेश मिळवून देणे',
-    'भटक्या जमाती क (धनगर) प्रवर्गातील मॅट्रिकोत्तर शिक्षण घेणाऱ्या गुणवत्ताधारक विद्यार्थ्यांसाठी राज्याच्या महसुली विभागाच्या मुख्यालयाच्या ठिकाणी वसतीगृह निर्माण करणे',
-    'धनगर समाजाच्या विद्यार्थ्यांसाठी पंडित दीनदयाल उपाध्याय स्वयंम योजना',
-    'संध लोकसेवा आयोग/महाराष्ट्र लोकसेवा आयोग यांच्या पूर्व परीक्षेसाठी निवासी प्रशिक्षण देणे',
-    'केंद्र शासनाच्या स्टॅन्ड अप योजनेत भटक्या जमाती क प्रवर्गातील धनगर समाजाच्या महिलांना सहाय्यक करण्यासाठी मार्जिन मनी उपलब्ध करून देणे',
-    'भटक्या जमाती क प्रवर्गातील धनगर समाजाच्या बेघर कुटुंबीयांना घरकुले बांधून देणे',
-    'भटक्या जमाती कया प्रवर्गातील आवश्यक असलेल्या परंतु अर्थसंकल्पीत निधी उपलब्ध नसलेल्या योजना/कार्यक्रम राबविण्यासाठी न्यूक्लियस बजेट योजना'
-  ],
-  '4': [
-    'सामूहिक विवाह सोहळा',
-    'सामाजिक कार्यासाठी गुणवत्ता पुरस्कार'
-  ],
-  '5': [
-    'संशोधन आणि प्रशिक्षण संस्था',
-    'आर्थिक विकास महामंडळे'
-  ]
-};
-
-// Sub-sub-schemes for specific sub-schemes
-const subSubSchemes = {
-  '1': {
-    '1': [
-      'विमुक्त जाती, भटक्या जमाती व विशेष मागास प्रवर्गासाठीच्या आश्रमशाळा',
-      'ऊसतोड कामगाराच्या मुला-मुलींसाठी निवासी आश्रम शाळा',
-      'विद्यानिकेतन शाळा'
-    ],
-    '2': [
-      'मॅट्रिकपूर्व शिष्यवृत्ती',
-      'मॅट्रिकोत्तर शिष्यवृत्ती',
-      'परदेशात उच्च शिक्षणासाठी शिष्यवृत्ती योजना'
-    ],
-    '3': [
-      'राज्यातील इतर मागास प्रवर्ग, विमुक्त जाती, भटक्या जमाती व विशेष मागास प्रवर्ग या प्रवर्गातील विद्यार्थ्यांसाठी जिल्हानिहाय वसतीगृहे',
-      'ज्ञानज्योती सावित्रीबाई फुले आधार योजना'
-    ]
-  },
-  '5': {
-    '1': [
-      'इतर मागासवर्ग, विमुक्त जाती, भटक्या जमाती, विशेष मागासवर्ग संशोधन आणि प्रशिक्षण संस्था',
-      'खुला प्रवर्ग संशोधन आणि प्रशिक्षण संस्था'
-    ],
-    '2': [
-      'इतर मागासवर्गीय (OBC) आर्थिक विकास महामंडळ',
-      'विमुक्त जाती आणि भटक्या जमाती (VJNT) आर्थिक विकास महामंडळ'
-    ]
+// Validate Twilio credentials and initialize client
+let client;
+try {
+  if (!accountSid || !authToken) {
+    throw new Error('Twilio credentials are missing. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in environment variables.');
   }
-};
-
-// Details for sub-schemes or sub-sub-schemes
-const details = {
-  '1': {
-    '1': {
-      '1': 'लाभ घेणारा प्रवर्ग: विमुक्त जाती, भटक्या जमाती व विशेष मागास प्रवर्ग\n\nया योजनेंतर्गत विमुक्त जाती (VJNT), भटक्या जमाती आणि विशेष मागास प्रवर्ग (SBC) मधील मुलांसाठी निवासी आश्रमशाळा चालविल्या जातात. या योजनेचा उद्देश प्राथमिक आणि माध्यमिक स्तरावर शिक्षणाला प्रोत्साहन देणे हा आहे. राज्यात विजाभज प्रवर्गातील विद्यार्थ्यांसाठी 530 प्राथमिक, 297 माध्यमिक आणि 148 उच्च माध्यमिक आश्रमशाळा आहेत. स्वयंसेवी संस्थांना दरमहा दरडोई रु.1500/- अनुदान दिले जाते.',
-      '2': 'लाभ घेणारा प्रवर्ग: विमुक्त जाती, भटक्या जमाती\n\nया योजनेंतर्गत ऊसतोड कामगारांच्या मुला-मुलींसाठी निवासी आश्रमशाळा चालविल्या जातात. केज व परळी वैजनाथ (जि. बीड) येथे इयत्ता 1 ली ते 10 वी साठी दोन शाळा 1996 पासून सुरू आहेत. विद्यार्थ्यांना मोफत निवास, भोजन आणि शिक्षण दिले जाते. स्वयंसेवी संस्थांना दरमहा दरडोई रु.1500/- अनुदान दिले जाते.',
-      '3': 'लाभ घेणारा प्रवर्ग: विमुक्त जाती, भटक्या जमाती व विशेष मागास प्रवर्ग\n\nया योजनेंतर्गत विजाभज जमातीतील हुशार विद्यार्थ्यांसाठी विद्यानिकेतन शाळा चालविल्या जातात. नांदेड येथे 1996-97 पासून सुरू असलेल्या शाळेत इयत्ता 5 वी ते 12 वी पर्यंत 640 विद्यार्थी शिक्षण घेत आहेत. विद्यार्थ्यांना मोफत निवास, भोजन आणि शैक्षणिक साहित्य दिले जाते.'
-    },
-    '2': {
-      '1': 'लाभ घेणारा प्रवर्ग: इतर मागास वर्ग, VJNT व SBC\n\nया योजनेंतर्गत इतर मागास वर्ग (OBC), विमुक्त जाती (VJNT), आणि विशेष मागास प्रवर्ग (SBC) मधील मुलींना मॅट्रिकपूर्व शिक्षणासाठी शिष्यवृत्ती दिली जाते. इयत्ता 8 वी ते 10 वी साठी दरमहा रु.300/- प्रमाणे 10 महिन्यांसाठी रु.3000/- शिष्यवृत्ती दिली जाते (2023 च्या सुधारित दरानुसार). उत्पन्नाची अट नाही.',
-      '2': 'लाभ घेणारा प्रवर्ग: इतर मागास वर्ग, VJNT व SBC\n\nया योजनेंतर्गत इतर मागास वर्ग (OBC), विमुक्त जाती (VJNT), आणि विशेष मागास प्रवर्ग (SBC) मधील विद्यार्थ्यांना मॅट्रिकोत्तर शिक्षणासाठी शिष्यवृत्ती दिली जाते. या योजनेचा उद्देश उच्च शिक्षणाला प्रोत्साहन देणे हा आहे.',
-      '3': 'लाभ घेणारा प्रवर्ग: इतर मागास वर्ग, VJNT व SBC\n\nया योजनेंतर्गत इतर मागास वर्ग (OBC), विमुक्त जाती (VJNT), आणि विशेष मागास प्रवर्ग (SBC) मधील गुणवंत विद्यार्थ्यांना परदेशात उच्च शिक्षण घेण्यासाठी शिष्यवृत्ती दिली जाते. या योजनेचा उद्देश आंतरराष्ट्रीय स्तरावर शिक्षणाची संधी उपलब्ध करून देणे हा आहे.'
-    },
-    '3': {
-      '1': 'लाभ घेणारा प्रवर्ग: OBC, VJNT व SBC\n\nया योजनेंतर्गत इतर मागास प्रवर्ग, विमुक्त जाती, भटक्या जमाती व विशेष मागास प्रवर्ग या प्रवर्गातील विद्यार्थ्यांसाठी जिल्हानिहाय वसतीगृहे चालविली जातात. या वसतीगृहात विद्यार्थ्यांना मोफत निवास, भोजन आणि शैक्षणिक सुविधा पुरविल्या जातात.',
-      '2': 'लाभ घेणारा प्रवर्ग: OBC, VJNT व SBC\n\nया योजनेंतर्गत इतर मागास प्रवर्ग (OBC), विमुक्त जाती (VJNT), आणि विशेष मागास प्रवर्ग (SBC) मधील मुलींना शिक्षणासाठी आर्थिक आधार दिला जातो. या योजनेचा उद्देश मुलींच्या शिक्षणाला प्रोत्साहन देणे आणि त्यांना स्वावलंबी बनविणे हा आहे.'
-    }
-  },
-  '2': {
-    '1': 'लाभ घेणारा प्रवर्ग: विमुक्त जाती, भटक्या जमाती (VJNT)\n\nया योजनेंतर्गत विमुक्त जाती आणि भटक्या जमातींसाठी तांडा आणि वस्ती सुधारणा केली जाते. या योजनेचा उद्देश राहणीमान सुधारणे हा आहे.',
-    '2': 'लाभ घेणारा प्रवर्ग: विमुक्त जाती, भटक्या जमाती (VJNT)\n\nया योजनेंतर्गत विमुक्त जाती आणि भटक्या जमातींसाठी मुक्त वसाहती बांधल्या जातात. या योजनेचा उद्देश निवासाची सोय करणे हा आहे.',
-    '3': 'लाभ घेणारा प्रवर्ग: विमुक्त जाती, भटक्या जमाती (VJNT)\n\nया योजनेंतर्गत विमुक्त जाती आणि भटक्या जमातींसह इतर मागास प्रवर्गातील कुटुंबांना घरकुले बांधण्यासाठी आर्थिक सहाय्य प्रदान केले जाते.'
-  },
-  '3': {
-    '1': 'लाभ घेणारा प्रवर्ग: धनगर समाज (भटक्या जमाती, VJNT)\n\nया योजनेंतर्गत धनगर समाजातील 10,000 विद्यार्थ्यांना शहरातील इंग्रजी माध्यमाच्या नामांकित निवासी शाळांमध्ये इयत्ता 1 ली ते 12 वी पर्यंत शिक्षण दिले जाते (2024 मध्ये 5500 वरून 10000 पर्यंत वाढ). पालकांचे वार्षिक उत्पन्न रु.1 लाखापेक्षा कमी असावे. विद्यार्थ्यांना मोफत निवास, भोजन, शैक्षणिक साहित्य आणि प्रवास खर्च दिला जातो. शाळेचा मागील 3 वर्षांचा निकाल किमान 80% असावा.',
-    '2': 'लाभ घेणारा प्रवर्ग: धनगर समाज (भटक्या जमाती, VJNT)\n\nया योजनेंतर्गत नवी मुंबई, पुणे, औरंगाबाद, नाशिक, नागपूर व अमरावती येथे प्रत्येकी 200 प्रवेशक्षमतेची (मुलांसाठी 100 व मुलींसाठी 100) वसतीगृहे निर्माण केली जातील. धनगर समाजाला 50% जागा राखीव आहेत, उर्वरित इतर प्रवर्गांना वाटप केल्या जातील. विद्यार्थ्यांना मोफत निवास, भोजन, शैक्षणिक साहित्य आणि आरोग्य सुविधा पुरविल्या जातील.',
-    '3': 'लाभ घेणारा प्रवर्ग: धनगर समाज (भटक्या जमाती, VJNT)\n\nया योजनेंतर्गत धनगर समाजातील विद्यार्थ्यांना इयत्ता 12 वी नंतर तंत्रशिक्षण आणि व्यवसाय शिक्षणासाठी आर्थिक सहाय्य दिले जाते. मुख्य शहरांत प्रति विद्यार्थी रु.60,000/-, इतर विभागीय शहरांत रु.51,000/- आणि जिल्ह्यांत रु.43,000/- वार्षिक भत्ता दिला जातो. पालकांचे उत्पन्न रु.2.5 लाखांपेक्षा कमी असावे.',
-    '4': 'लाभ घेणारा प्रवर्ग: धनगर समाज (भटक्या जमाती, VJNT)\n\nया योजनेंतर्गत धनगर समाजातील विद्यार्थ्यांना संध लोकसेवा आयोग आणि महाराष्ट्र लोकसेवा आयोगाच्या पूर्व परीक्षेसाठी निवासी प्रशिक्षण दिले जाते.',
-    '5': 'लाभ घेणारा प्रवर्ग: धनगर समाज (भटक्या जमाती, VJNT)\n\nया योजनेंतर्गत धनगर समाजातील नवउद्योजक महिलांना स्टॅन्ड अप इंडिया योजनेत 15% मार्जिन मनी उपलब्ध करून दिली जाते. महिलांनी 10% स्वहिस्सा भरल्यानंतर उर्वरित 15% राज्य शासनामार्फत दिले जाते.',
-    '6': 'लाभ घेणारा प्रवर्ग: धनगर समाज (भटक्या जमाती, VJNT)\n\nया योजनेंतर्गत ग्रामीण भागातील धनगर समाजातील 25,000 बेघर कुटुंबांसाठी घरकुले बांधण्यासाठी प्रती घरकुल रु.1,35,200/- (सर्वसाधारण क्षेत्रासाठी रु.1,24,800/-) अनुदान दिले जाते.',
-    '7': 'लाभ घेणारा प्रवर्ग: धनगर समाज (भटक्या जमाती, VJNT)\n\nया योजनेंतर्गत धनगर समाजासाठी नवीन योजनांसाठी न्यूक्लियस बजेट अंतर्गत सन 2023-24 साठी रु.10 कोटींची तरतूद केली जाते.'
-  },
-  '4': {
-    '1': 'लाभ घेणारा प्रवर्ग: विमुक्त जाती, भटक्या जमाती, OBC, SBC\n\nया योजनेंतर्गत सामूहिक विवाह सोहळ्यामध्ये भाग घेणाऱ्या दाम्पत्यांना आर्थिक सहाय्य दिले जाते. या योजनेचा उद्देश सामाजिक एकता वाढवणे हा आहे.',
-    '2': 'लाभ घेणारा प्रवर्ग: विमुक्त जाती, भटक्या जमाती, OBC, SBC\n\nया योजनेंतर्गत विमुक्त जाती, भटक्या जमाती, OBC आणि SBC मधील व्यक्तींना त्यांच्या सामाजिक कार्यासाठी गुणवत्ता पुरस्कार दिला जातो.'
-  },
-  '5': {
-    '1': {
-      '1': 'लाभ घेणारा प्रवर्ग: इतर मागासवर्ग, विमुक्त जाती, भटक्या जमाती, विशेष मागासवर्ग\n\nया संस्थेमार्फत इतर मागासवर्ग, विमुक्त जाती, भटक्या जमाती आणि विशेष मागासवर्गातील विद्यार्थ्यांसाठी संशोधन आणि प्रशिक्षण कार्यक्रम राबविले जातात.',
-      '2': 'लाभ घेणारा प्रवर्ग: खुला प्रवर्ग\n\nया संस्थेमार्फत खुला प्रवर्गातील व्यक्तींसाठी संशोधन आणि प्रशिक्षण कार्यक्रम राबविले जातात.'
-    },
-    '2': {
-      '1': 'लाभ घेणारा प्रवर्ग: OBC\n\nया महामंडळामार्फत इतर मागासवर्गीय (OBC) व्यक्तींसाठी आर्थिक विकासाच्या योजना राबविल्या जातात.',
-      '2': 'लाभ घेणारा प्रवर्ग: VJNT\n\nया महामंडळामार्फत विमुक्त जाती आणि भटक्या जमाती (VJNT) साठी आर्थिक विकासाच्या योजना राबविल्या जातात.'
-    }
-  }
-};
-
-// Function to send WhatsApp message
-function sendWhatsAppMessage(to, body) {
-  client.messages
-    .create({
-      body: body,
-      from: 'whatsapp:+14155238886', // Replace with your Twilio WhatsApp number
-      to: to
-    })
-    .then(message => console.log(`Message sent: ${message.sid}`))
-    .catch(err => console.error(err));
+  client = new twilio(accountSid, authToken);
+} catch (error) {
+  console.error('Failed to initialize Twilio client:', error.message);
+  client = null;
 }
 
-// Handle incoming WhatsApp messages
-app.post('/webhook', (req, res) => {
-  const incomingMessage = req.body.Body;
-  const from = req.body.From;
-  let responseMessage = '';
+// Store user state (in-memory; use a database in production)
+const userState = {};
 
-  // Split the incoming message into parts
-  const messageParts = incomingMessage.split('.').map(part => part.trim());
+// Sub-schemes for each main scheme
+const subSchemes = {
+  '1': [
+    '1. मॅट्रिकपूर्व शिष्यवृती',
+    '2. मॅट्रिकोत्तर शिष्यवृती',
+    '3. परदेशात उच्च शिक्षणासाठी शिष्यवृती योजना'
+  ],
+  '2': [], // ज्ञानज्योती सावित्रीबाई फुले आधार योजना has no sub-schemes
+  '3': [], // पंडित दीनदयाळ उपाध्याय स्वयंम योजना has no sub-schemes
+  '4': [], // मोदी आवास योजना has no sub-schemes
+  '5': [], // मॅट्रिक पूर्व शिष्यवृत्ती योजना has no sub-schemes
+  '6': [], // इतर मागास बहुजन कल्याण मुलांचे शासकीय वसतीगृह कोल्हापूर has no sub-schemes
+  '7': []  // इतर मागास बहुजन कल्याण मुलींचे शासकीय वसतीगृह कोल्हापूर has no sub-schemes
+};
 
-  if (messageParts.length === 1 && (messageParts[0] === 'हाय' || messageParts[0] === 'Hi')) {
-    // Initial greeting
-    responseMessage = 'नमस्ते! खालील योजनांची माहिती पाहण्यासाठी मुख्य योजना निवडा:\n';
-    mainSchemes.forEach((scheme, index) => {
-      responseMessage += `${index + 1}. ${scheme}\n`;
-    });
-    responseMessage += 'कृपया मुख्य योजनेचा क्रमांक टाइप करा (उदा. 1)';
-  } else if (messageParts.length === 1 && !isNaN(messageParts[0])) {
-    // User selects a main scheme
-    const mainSchemeIndex = parseInt(messageParts[0]);
-    if (mainSchemeIndex > 0 && mainSchemeIndex <= mainSchemes.length) {
-      const selectedMainScheme = mainSchemes[mainSchemeIndex - 1];
-      const mainSchemeKey = mainSchemeIndex.toString();
-      responseMessage = `तुम्ही निवडलेली मुख्य योजना: ${selectedMainScheme}\n\nउपयोजनांची यादी:\n`;
-      subSchemes[mainSchemeKey].forEach((subScheme, index) => {
-        responseMessage += `${index + 1}. ${subScheme}\n`;
+// Sub-scheme details
+const subSchemeDetails = {
+  '1': {
+    '1': 'लाभ घेणारा प्रवर्ग: इतर मागास वर्ग व VJNT व SBC\n\n१. मॅट्रिकपूर्व शिष्यवृती\n   या योजनेंतर्गत इतर मागास वर्ग (OBC), विमुक्त जाती (VJNT), आणि विशेष मागास प्रवर्ग (SBC) मधील विद्यार्थ्यांना मॅट्रिकपूर्व शिक्षणासाठी शिष्यवृत्ती दिली जाते. या योजनेचा उद्देश प्राथमिक आणि माध्यमिक स्तरावर शिक्षणाला प्रोत्साहन देणे हा आहे.',
+    '2': 'लाभ घेणारा प्रवर्ग: इतर मागास वर्ग व VJNT व SBC\n\n२. मॅट्रिकोत्तर शिष्यवृती\n   या योजनेंतर्गत इतर मागास वर्ग (OBC), विमुक्त जाती (VJNT), आणि विशेष मागास प्रवर्ग (SBC) मधील विद्यार्थ्यांना मॅट्रिकोत्तर शिक्षणासाठी शिष्यवृत्ती दिली जाते. या योजनेचा उद्देश उच्च शिक्षणाला प्रोत्साहन देणे हा आहे.',
+    '3': 'लाभ घेणारा प्रवर्ग: इतर मागास वर्ग व VJNT व SBC\n\n३. परदेशात उच्च शिक्षणासाठी शिष्यवृती योजना\n   या योजनेंतर्गत इतर मागास वर्ग (OBC), विमुक्त जाती (VJNT), आणि विशेष मागास प्रवर्ग (SBC) मधील गुणवंत विद्यार्थ्यांना परदेशात उच्च शिक्षण घेण्यासाठी शिष्यवृत्ती दिली जाते. या योजनेचा उद्देश आंतरराष्ट्रीय स्तरावर शिक्षणाची संधी उपलब्ध करून देणे हा आहे.'
+  },
+  '2': {
+    '0': 'लाभ घेणारा प्रवर्ग: OBC, VJNT व SBC\n\nज्ञानज्योती सावित्रीबाई फुले आधार योजना\n   या योजनेंतर्गत इतर मागास प्रवर्ग (OBC), विमुक्त जाती (VJNT), आणि विशेष मागास प्रवर्ग (SBC) मधील मुलींना शिक्षणासाठी आर्थिक आधार दिला जातो. या योजनेचा उद्देश मुलींच्या शिक्षणाला प्रोत्साहन देणे आणि त्यांना स्वावलंबी बनविणे हा आहे.'
+  },
+  '3': {
+    '0': 'पंडित दीनदयाळ उपाध्याय स्वयंम योजना\n   धनगर समाजाच्या विद्यार्थ्यांसाठी पंडित दीनदयाल उपाध्याय स्वयंम योजना राबविली जाते. या योजनेंतर्गत धनगर समाजातील विद्यार्थ्यांना स्वयंरोजगार आणि कौशल्य विकासासाठी प्रशिक्षण आणि आर्थिक सहाय्य दिले जाते.'
+  },
+  '4': {
+    '0': 'मोदी आवास योजना\n   या योजनेअंतर्गत घरकुले बांधण्यासाठी मदत दिली जाते. विमुक्त जाती आणि भटक्या जमातींसह इतर मागास प्रवर्गातील कुटुंबांना निवासासाठी आर्थिक सहाय्य प्रदान केले जाते.'
+  },
+  '5': {
+    '0': 'मॅट्रिक पूर्व शिष्यवृत्ती योजना\n   या योजनेंतर्गत इतर मागास वर्ग (OBC), विमुक्त जाती (VJNT), आणि विशेष मागास प्रवर्ग (SBC) मधील विद्यार्थ्यांना मॅट्रिकपूर्व शिक्षणासाठी शिष्यवृत्ती दिली जाते. या योजनेचा उद्देश प्राथमिक आणि माध्यमिक स्तरावर शिक्षणाला प्रोत्साहन देणे हा आहे.'
+  },
+  '6': {
+    '0': 'इतर मागास बहुजन कल्याण मुलांचे शासकीय वसतीगृह कोल्हापूर\n   या योजनेंतर्गत इतर मागास प्रवर्ग, विमुक्त जाती, भटक्या जमाती व विशेष मागास प्रवर्ग या प्रवर्गातील मुलांसाठी कोल्हापूर येथे शासकीय वसतीगृह चालविले जाते. या वसतीगृहात मुलांना मोफत निवास, भोजन आणि शैक्षणिक सुविधा पुरविल्या जातात.'
+  },
+  '7': {
+    '0': 'इतर मागास बहुजन कल्याण मुलींचे शासकीय वसतीगृह कोल्हापूर\n   या योजनेंतर्गत इतर मागास प्रवर्ग, विमुक्त जाती, भटक्या जमाती व विशेष मागास प्रवर्ग या प्रवर्गातील मुलींसाठी कोल्हापूर येथे शासकीय वसतीगृह चालविले जाते. या वसतीगृहात मुलींना मोफत निवास, भोजन आणि शैक्षणिक सुविधा पुरविल्या जातात.'
+  }
+};
+
+// Helper to send WhatsApp text messages via Twilio with message splitting
+async function sendMessage(to, body) {
+  if (!client) {
+    console.error('Twilio client is not initialized. Cannot send message.');
+    return;
+  }
+  const MAX_LENGTH = 1600; // WhatsApp message character limit
+  try {
+    // If message is under the limit, send it directly
+    if (body.length <= MAX_LENGTH) {
+      await client.messages.create({
+        from: twilioWhatsAppNumber,
+        to: to,
+        body: body
       });
-      responseMessage += '\nकृपया उपयोजनेचा क्रमांक टाइप करा (उदा. 1)';
+      console.log(`Text message sent to ${to}`);
     } else {
-      responseMessage = 'कृपया वैध मुख्य योजना क्रमांक टाइप करा (उदा. 1)';
-    }
-  } else if (messageParts.length === 2 && !isNaN(messageParts[0]) && !isNaN(messageParts[1])) {
-    // User selects a sub-scheme
-    const mainSchemeIndex = parseInt(messageParts[0]);
-    const subSchemeIndex = parseInt(messageParts[1]);
-    if (mainSchemeIndex > 0 && mainSchemeIndex <= mainSchemes.length) {
-      const mainSchemeKey = mainSchemeIndex.toString();
-      if (subSchemeIndex > 0 && subSchemeIndex <= subSchemes[mainSchemeKey].length) {
-        const selectedSubScheme = subSchemes[mainSchemeKey][subSchemeIndex - 1];
-        const subSchemeKey = subSchemeIndex.toString();
+      // Split the message at newline boundaries
+      const lines = body.split('\n');
+      let currentChunk = '';
+      const chunks = [];
 
-        // Check if there are sub-sub-schemes
-        if (subSubSchemes[mainSchemeKey] && subSubSchemes[mainSchemeKey][subSchemeKey]) {
-          responseMessage = `तुम्ही निवडलेली उपयोजना: ${selectedSubScheme}\n\nउप-उपयोजनांची यादी:\n`;
-          subSubSchemes[mainSchemeKey][subSchemeKey].forEach((subSubScheme, index) => {
-            responseMessage += `${index + 1}. ${subSubScheme}\n`;
-          });
-          responseMessage += '\nकृपया उप-उपयोजनेचा क्रमांक टाइप करा (उदा. 1)';
+      for (const line of lines) {
+        const lineWithNewline = line + '\n';
+        if (currentChunk.length + lineWithNewline.length <= MAX_LENGTH) {
+          currentChunk += lineWithNewline;
         } else {
-          // No sub-sub-schemes, show details directly
-          responseMessage = `तुम्ही निवडलेली उपयोजना: ${selectedSubScheme}\n\nतपशील:\n${details[mainSchemeKey][subSchemeKey]}`;
+          if (currentChunk) {
+            chunks.push(currentChunk.trimEnd());
+          }
+          currentChunk = lineWithNewline;
         }
-      } else {
-        responseMessage = 'कृपया वैध उपयोजना क्रमांक टाइप करा (उदा. 1)';
       }
-    } else {
-      responseMessage = 'कृपया वैध मुख्य योजना क्रमांक टाइप करा (उदा. 1)';
-    }
-  } else if (messageParts.length === 3 && !isNaN(messageParts[0]) && !isNaN(messageParts[1]) && !isNaN(messageParts[2])) {
-    // User selects a sub-sub-scheme
-    const mainSchemeIndex = parseInt(messageParts[0]);
-    const subSchemeIndex = parseInt(messageParts[1]);
-    const subSubSchemeIndex = parseInt(messageParts[2]);
-    if (mainSchemeIndex > 0 && mainSchemeIndex <= mainSchemes.length) {
-      const mainSchemeKey = mainSchemeIndex.toString();
-      if (subSchemeIndex > 0 && subSchemeIndex <= subSchemes[mainSchemeKey].length) {
-        const subSchemeKey = subSchemeIndex.toString();
-        if (subSubSchemes[mainSchemeKey] && subSubSchemes[mainSchemeKey][subSchemeKey] && subSubSchemeIndex > 0 && subSubSchemeIndex <= subSubSchemes[mainSchemeKey][subSchemeKey].length) {
-          const selectedSubSubScheme = subSubSchemes[mainSchemeKey][subSchemeKey][subSubSchemeIndex - 1];
-          const subSubSchemeKey = subSubSchemeIndex.toString();
-          responseMessage = `तुम्ही निवडलेली उप-उपयोजना: ${selectedSubSubScheme}\n\nतपशील:\n${details[mainSchemeKey][subSchemeKey][subSubSchemeKey]}`;
-        } else {
-          responseMessage = 'कृपया वैध उप-उपयोजना क्रमांक टाइप करा (उदा. 1)';
-        }
-      } else {
-        responseMessage = 'कृपया वैध उपयोजना क्रमांक टाइप करा (उदा. 1)';
+
+      if (currentChunk) {
+        chunks.push(currentChunk.trimEnd());
       }
-    } else {
-      responseMessage = 'कृपया वैध मुख्य योजना क्रमांक टाइप करा (उदा. 1)';
+
+      // Send each chunk as a separate message
+      for (const chunk of chunks) {
+        await client.messages.create({
+          from: twilioWhatsAppNumber,
+          to: to,
+          body: chunk
+        });
+        console.log(`Text message chunk sent to ${to}`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
+  } catch (error) {
+    console.error('Error sending text message:', error.message);
+  }
+}
+
+// List of main schemes
+async function sendMainSchemesList(to) {
+  const schemes = [
+    '0. मेन्यू परत जा',
+    '1. भारत सरकार शिष्यवृत्ती योजना MAHDBT द्वारे',
+    '2. ज्ञानज्योती सावित्रीबाई फुले आधार योजना',
+    '3. पंडित दीनदयाळ उपाध्याय स्वयंम योजना',
+    '4. मोदी आवास योजना',
+    '5. मॅट्रिक पूर्व शिष्यवृत्ती योजना',
+    '6. इतर मागास बहुजन कल्याण मुलांचे शासकीय वसतीगृह कोल्हापूर',
+    '7. इतर मागास बहुजन कल्याण मुलींचे शासकीय वसतीगृह कोल्हापूर'
+  ].join('\n');
+
+  const message = `नमस्कार! विभागा अंतर्गत राबविल्या जाणाऱ्या योजनांमध्ये आपले स्वागत आहे.\nकृपया एक योजना निवडा:\n\n${schemes}\n\nक्रमांकासह उत्तर द्या (उदा., 1). मेन्यूवर परत जाण्यासाठी 0 सह उत्तर द्या.`;
+  await sendMessage(to, message);
+}
+
+// List of sub-schemes for a selected main scheme
+async function sendSubSchemesList(to, mainScheme) {
+  const subSchemesList = subSchemes[mainScheme];
+  if (subSchemesList.length === 0) {
+    const details = subSchemeDetails[mainScheme]['0'];
+    await sendMessage(to, `${details}\n\nमागील मेन्यूवर परत जाण्यासाठी 0 सह उत्तर द्या.`);
   } else {
-    responseMessage = 'कृपया योग्य फॉरमॅटमध्ये माहिती टाइप करा. सुरुवात करण्यासाठी "हाय" टाइप करा.';
+    const message = `कृपया खालील योजनांमधून एक निवडा:\n\n0. मागील मेन्यू परत जा\n${subSchemesList.join('\n')}\n\nक्रमांकासह उत्तर द्या (उदा., 1). मागील मेन्यूवर परत जाण्यासाठी 0 सह उत्तर द्या.`;
+    await sendMessage(to, message);
+  }
+}
+
+// Webhook to handle incoming messages from Twilio
+app.post('/webhook', async (req, res) => {
+  const from = req.body.From;
+  const messageBody = req.body.Body;
+
+  if (!userState[from]) {
+    userState[from] = { step: 'mainSchemes' };
+    await sendMainSchemesList(from);
+  } else if (userState[from].step === 'mainSchemes') {
+    const choice = messageBody;
+    if (/^\d+$/.test(choice)) {
+      if (choice === '0') {
+        userState[from] = { step: 'mainSchemes' };
+        await sendMainSchemesList(from);
+      } else if (choice >= 1 && choice <= 7) {
+        userState[from] = { step: 'subSchemes', mainScheme: choice };
+        await sendSubSchemesList(from, choice);
+      } else {
+        await sendMessage(from, 'कृपया 0 ते 7 मधील एक वैध क्रमांक निवडा. मेन्यूवर परत जाण्यासाठी 0 सह उत्तर द्या.');
+      }
+    } else {
+      await sendMessage(from, 'कृपया 0 ते 7 मधील एक वैध क्रमांक निवडा. मेन्यूवर परत जाण्यासाठी 0 सह उत्तर द्या.');
+    }
+  } else if (userState[from].step === 'subSchemes') {
+    const mainScheme = userState[from].mainScheme;
+    const choice = messageBody;
+    const maxSubScheme = subSchemes[mainScheme].length;
+
+    if (/^\d+$/.test(choice)) {
+      if (choice === '0') {
+        userState[from] = { step: 'mainSchemes' };
+        await sendMainSchemesList(from);
+      } else if (choice >= 1 && choice <= maxSubScheme) {
+        const details = subSchemeDetails[mainScheme][choice];
+        await sendMessage(from, `${details}\n\nमागील मेन्यूवर परत जाण्यासाठी 0 सह उत्तर द्या.`);
+      } else {
+        await sendMessage(from, `कृपया 0 ते ${maxSubScheme} मधील एक वैध क्रमांक निवडा. मागील मेन्यूवर परत जाण्यासाठी 0 सह उत्तर द्या.`);
+      }
+    } else {
+      await sendMessage(from, `कृपया 0 ते ${maxSubScheme} मधील एक वैध क्रमांक निवडा. मागील मेन्यूवर परत जाण्यासाठी 0 सह उत्तर द्या.`);
+    }
   }
 
-  // Send the response via WhatsApp
-  sendWhatsAppMessage(from, responseMessage);
-
-  // Respond to Twilio
   res.status(200).send('OK');
 });
 
-// Start the server
+// Basic route for testing
+app.get('/', (req, res) => {
+  res.send('व्हॉट्सअॅप चॅटबॉट सुरू आहे!');
+});
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
